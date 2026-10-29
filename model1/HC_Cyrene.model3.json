@@ -1,0 +1,32 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "HC_Cyrene.moc3",
+		"Textures": [
+			"HC_Cyrene.4096/texture_00.png",
+			"HC_Cyrene.4096/texture_01.png",
+			"HC_Cyrene.4096/texture_02.png",
+			"HC_Cyrene.4096/texture_03.png"
+		],
+		"Physics": "HC_Cyrene.physics3.json",
+		"DisplayInfo": "HC_Cyrene.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": [
+				"ParamMouthForm",
+				"ParamMouthOpenY"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		}
+	]
+}

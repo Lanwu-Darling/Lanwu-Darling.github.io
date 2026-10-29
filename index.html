@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>我的游戏</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font-family: -apple-system, "PingFang SC", sans-serif; color: #fff; }
+  
+  /* ========= 第一页：大昔涟 ========= */
+  #home { 
+    position: fixed; inset: 0; 
+    background: #ffb6c1 url("images/downloaded-image.jpeg") center/cover no-repeat;
+    background-image: url("images/downloaded-image.jpeg"), radial-gradient(circle at center, #ffe4ef 0%, #ffb6c1 100%);
+    transition: opacity .6s ease; 
+  }
+
+  /* 👇 新增：在背景和昔涟之间加一层极其轻微的暗紫色遮罩，压住背景的高光，让按钮和人物更突出 */
+  #home::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(40, 20, 50, 0.3); /* 0.3是透明度，觉得暗可以改成0.2 */
+    z-index: 1;
+    pointer-events: none;
+  }
+  
+  #live2d-1 { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; opacity: 0; transition: opacity 1.5s ease; }
+  #live2d-1.loaded { opacity: 1; } 
+
+  .loading-text {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 4; font-size: 20px; font-weight: bold; color: #ff7eb3;
+    animation: breathe 1.5s infinite alternate;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.5); /* 加了点阴影防止看不清 */
+  }
+  @keyframes breathe { from { opacity: 0.4; } to { opacity: 1; } }
+
+  .btn-wrap { position: absolute; left: 0; right: 0; bottom: 8%; z-index: 3; text-align: center; }
+  
+  /* 👇 修改：高级毛玻璃按钮 */
+  .start-btn {
+    position: relative; padding: 16px 50px; font-size: 20px; font-weight: 900;
+    border: 2px solid rgba(255, 255, 255, 0.8); /* 白色边框 */
+    border-radius: 50px; cursor: pointer;
+    color: #fff; /* 白色文字 */
+    background: rgba(255, 255, 255, 0.15); /* 半透明白 */
+    backdrop-filter: blur(8px); /* 毛玻璃模糊特效 */
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3); /* 黑色阴影，更有立体感 */
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .start-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+  }
+
+  /* 保留那一抹闪光扫过的感觉 */
+  .start-btn::before {
+    content: ""; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+    background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 100%);
+    transform: skewX(-25deg); animation: shine 3s infinite;
+  }
+  @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }
+  
+  #home.jump { animation: jump .4s ease; }
+  @keyframes jump { 50% { transform: scale(1.05); } }
+  #home.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+  
+  /* ========= 第二页：视频 ========= */
+  #wait { 
+    position: fixed; inset: 0; z-index: 10; 
+    opacity: 0; visibility: hidden; transition: opacity .8s ease; 
+    background: #000; 
+  }
+  #wait.show { opacity: 1; visibility: visible; }
+  
+  #qban-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; 
+    display: block;
+  }
+
+  .error-msg {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #ff5e7e; font-size: 20px; text-align: center; display: none; z-index: 99;
+  }
+</style>
+</head>
+<body>
+  <section id="home">
+    <div class="loading-text" id="loading1">小昔涟加载中...✨</div>
+    <canvas id="live2d-1"></canvas>
+    <div class="btn-wrap"><button class="start-btn" id="startBtn">开始游戏</button></div>
+  </section>
+  
+  <section id="wait">
+    <video id="qban-video" src="qban.mp4" playsinline></video>
+    <div class="error-msg" id="err">视频加载失败了 💦<br>请检查是不是叫 qban.mp4</div>
+  </section>
+
+  <audio id="bgm" loop preload="auto">
+    <source src="music/bgm.mp3" type="audio/mpeg" />
+  </audio>
+  
+  <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
+
+<script>
+  const home = document.getElementById('home');
+  const wait = document.getElementById('wait');
+  const startBtn = document.getElementById('startBtn');
+  const bgm = document.getElementById('bgm');
+  const qbanVideo = document.getElementById('qban-video');
+  const errMsg = document.getElementById('err');
+
+  const LIVE2D_URL = 'model1/HC_Cyrene.model3.json'; 
+  const LIVE2D_SIZE = 0.15; 
+  const LIVE2D_Y_OFFSET = 0;      
+
+  function loadLive2D() {
+    const app = new PIXI.Application({ view: document.getElementById('live2d-1'), transparent: true, resizeTo: window });
+    PIXI.live2d.Live2DModel.from(LIVE2D_URL).then(model => {
+      app.stage.addChild(model);
+      model.anchor.set(0.5, 0.5); 
+      
+      const fit = () => {
+          model.scale.set(LIVE2D_SIZE); 
+          model.x = app.screen.width / 2;
+          model.y = (app.screen.height / 2) + LIVE2D_Y_OFFSET; 
+      };
+      fit();
+      window.addEventListener('resize', fit);
+
+      document.getElementById('live2d-1').classList.add('loaded');
+      document.getElementById('loading1').style.display = 'none'; 
+    }).catch(err => {
+      document.getElementById('loading1').innerText = "加载失败了";
+    });
+  }
+
+  loadLive2D();
+
+  qbanVideo.addEventListener('ended', () => {
+    bgm.play().catch(() => {});
+  });
+
+  qbanVideo.addEventListener('error', () => {
+    errMsg.style.display = 'block';
+  });
+
+  startBtn.addEventListener('click', () => {
+    home.classList.add('jump');
+    history.pushState({ page: 'wait' }, '', '#wait');
+    
+    setTimeout(() => {
+      home.classList.add('gone');
+      wait.classList.add('show');
+      
+      qbanVideo.currentTime = 0;
+      qbanVideo.play().catch(err => {});
+
+    }, 450);
+  });
+
+  window.addEventListener('popstate', () => {
+    wait.classList.remove('show');
+    home.classList.remove('gone');
+    home.classList.remove('jump');
+    qbanVideo.pause(); 
+    bgm.pause();
+  });
+</script>
+</body>
+</html>
